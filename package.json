@@ -1,12 +1,13 @@
 {
   "name": "zetta-backend",
   "version": "1.0.0",
-  "description": "Servidor do Zetta",
+  "description": "Backend do Zetta",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "axios": "^1.6.7"
   }
 }
