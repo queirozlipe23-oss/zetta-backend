@@ -55,3 +55,44 @@ const stocks = [
 "RENT3.SA",
 "MGLU3.SA"
 ];
+app.get("/scanner", async (req, res) => {
+
+  const results = [];
+
+  for (const symbol of stocks) {
+    try {
+
+      const cached = cache.get(symbol);
+
+      if (cached) {
+        results.push({
+          symbol,
+          source: "cache",
+          data: cached
+        });
+        continue;
+      }
+
+      const response = await axios.get(
+        `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${API_KEY}`
+      );
+
+      cache.set(symbol, response.data);
+
+      results.push({
+        symbol,
+        source: "api",
+        data: response.data
+      });
+
+    } catch (error) {
+      results.push({
+        symbol,
+        error: "erro ao buscar dados"
+      });
+    }
+  }
+
+  res.json(results);
+
+});
