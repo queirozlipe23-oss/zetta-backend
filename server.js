@@ -43,3 +43,15 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Servidor rodando na porta " + PORT);
 });
+const stocks = [
+"PETR4.SA",
+"VALE3.SA",
+"ITUB4.SA",
+"BBDC4.SA",
+"ABEV3.SA",
+"WEGE3.SA",
+"BBAS3.SA",
+"SUZB3.SA",
+"RENT3.SA",
+"MGLU3.SA"
+];
