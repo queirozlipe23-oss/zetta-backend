@@ -28,3 +28,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Servidor rodando na porta " + PORT);
 });
+"dependencies": {
+  "express": "^4.18.2",
+  "axios": "^1.6.0"
+}
