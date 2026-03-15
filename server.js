@@ -1,18 +1,9 @@
 const express = require("express");
 
 const app = express();
-app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("Zetta API está funcionando 🚀");
-});
-
-app.get("/status", (req, res) => {
-  res.json({
-    app: "Zetta",
-    status: "online",
-    version: "1.0"
-  });
+  res.send("Zetta API funcionando 🚀");
 });
 
 const PORT = process.env.PORT || 3000;
