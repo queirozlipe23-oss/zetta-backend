@@ -1,12 +1,10 @@
 const express = require("express");
-const yahooFinance = require("yahoo-finance2").default;
 const NodeCache = require("node-cache");
+const yahooFinance = require("yahoo-finance2").default;
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
-// cache de 5 minutos
 const cache = new NodeCache({ stdTTL: 300 });
 
 app.use(express.json());
@@ -25,12 +23,7 @@ app.get("/scanner", async (req, res) => {
     "VALE3.SA",
     "ITUB4.SA",
     "BBDC4.SA",
-    "ABEV3.SA",
-    "WEGE3.SA",
-    "BBAS3.SA",
-    "SUZB3.SA",
-    "RENT3.SA",
-    "MGLU3.SA"
+    "WEGE3.SA"
   ];
 
   const results = [];
@@ -43,7 +36,7 @@ app.get("/scanner", async (req, res) => {
 
       if (cached) {
         results.push({
-          symbol,
+          symbol: symbol,
           source: "cache",
           data: cached
         });
@@ -53,23 +46,34 @@ app.get("/scanner", async (req, res) => {
       const quote = await yahooFinance.quote(symbol);
 
       const data = {
-        price: quote.regularMarketPrice,
-        changePercent: quote.regularMarketChangePercent,
-        volume: quote.regularMarketVolume,
-        high: quote.regularMarketDayHigh,
-        low: quote.regularMarketDayLow
+        price: quote.regularMarketPrice || 0,
+        changePercent: quote.regularMarketChangePercent || 0,
+        volume: quote.regularMarketVolume || 0
       };
 
       cache.set(symbol, data);
 
       results.push({
-        symbol,
+        symbol: symbol,
         source: "api",
-        data
+        data: data
       });
 
     } catch (error) {
 
       results.push({
-        symbol,
-        error
+        symbol: symbol,
+        error: error.message
+      });
+
+    }
+
+  }
+
+  res.json(results);
+
+});
+
+app.listen(PORT, () => {
+  console.log("Servidor Zetta rodando na porta " + PORT);
+});
