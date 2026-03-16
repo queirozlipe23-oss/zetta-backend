@@ -1,6 +1,6 @@
 const express = require("express");
 const NodeCache = require("node-cache");
-const yahooFinance = require("yahoo-finance2").default;
+const yahooFinance = require("yahoo-finance2");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
