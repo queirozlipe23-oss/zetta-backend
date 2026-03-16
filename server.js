@@ -1,20 +1,4 @@
-const express = require("express");
-const NodeCache = require("node-cache");
-const yahooFinance = require("yahoo-finance2").default;
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-const cache = new NodeCache({ stdTTL: 300 });
-
-app.get("/", (req, res) => {
-  res.json({
-    status: "Zetta backend online",
-    scanner: "/scanner"
-  });
-});
-
-app.get("/scanner", async (req, res) => {
+app.get("/robot", async (req, res) => {
 
   const stocks = [
     "PETR4.SA",
@@ -30,38 +14,46 @@ app.get("/scanner", async (req, res) => {
 
     try {
 
-      const cached = cache.get(symbol);
+      const history = await yahooFinance.historical(symbol, {
+        period1: "2024-01-01",
+        interval: "1d"
+      });
 
-      if (cached) {
-        results.push({
-          symbol,
-          source: "cache",
-          data: cached
-        });
+      if (!history || history.length < 15) {
         continue;
       }
 
-      const quote = await yahooFinance.quote(symbol);
+      const closes = history.slice(-14).map(c => c.close);
 
-      const data = {
-        price: quote.regularMarketPrice,
-        change: quote.regularMarketChangePercent,
-        volume: quote.regularMarketVolume
-      };
+      const avg = closes.reduce((a,b)=>a+b,0) / closes.length;
 
-      cache.set(symbol, data);
+      const lastPrice = closes[closes.length - 1];
+
+      let signal = "HOLD";
+
+      if (lastPrice > avg) {
+        signal = "BUY";
+      }
+
+      if (lastPrice < avg) {
+        signal = "SELL";
+      }
+
+      const stopLoss = lastPrice * 0.98;
 
       results.push({
         symbol,
-        source: "api",
-        data
+        price: lastPrice,
+        average: avg,
+        signal,
+        stopLoss
       });
 
     } catch (error) {
 
       results.push({
         symbol,
-        error: error.message
+        error: "erro análise"
       });
 
     }
@@ -70,8 +62,4 @@ app.get("/scanner", async (req, res) => {
 
   res.json(results);
 
-});
-
-app.listen(PORT, () => {
-  console.log("Servidor Zetta rodando na porta " + PORT);
 });
