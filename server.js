@@ -15,25 +15,33 @@ const stocks = [
   "WEGE3.SA"
 ];
 
-const axiosInstance = axios.create({
-  timeout: 10000,
-  headers: {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-    "Accept": "application/json",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Connection": "keep-alive"
-  }
-});
+async function getStock(symbol) {
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+
+  const response = await axios.get(url);
+
+  const result = response.data.chart.result[0];
+
+  const price = result.meta.regularMarketPrice;
+  const previous = result.meta.previousClose;
+
+  const changePercent = ((price - previous) / previous) * 100;
+
+  return {
+    symbol,
+    price,
+    changePercent
+  };
+
 }
 
 app.get("/", (req, res) => {
+
   res.json({
     status: "Zetta backend online"
   });
+
 });
 
 app.get("/scanner", async (req, res) => {
@@ -53,26 +61,15 @@ app.get("/scanner", async (req, res) => {
 
     try {
 
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
+      const data = await getStock(symbol);
 
-      const response = await axiosInstance.get(url);
-
-      const quote = response.data.quoteResponse.result[0];
-
-      results.push({
-        symbol: quote.symbol,
-        price: quote.regularMarketPrice,
-        changePercent: quote.regularMarketChangePercent,
-        volume: quote.regularMarketVolume
-      });
-
-      await sleep(1500);
+      results.push(data);
 
     } catch (error) {
 
       results.push({
         symbol,
-        error: error.message
+        error: "erro ao buscar dados"
       });
 
     }
@@ -96,34 +93,26 @@ app.get("/robot", async (req, res) => {
 
     try {
 
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
-
-      const response = await axiosInstance.get(url);
-
-      const quote = response.data.quoteResponse.result[0];
+      const data = await getStock(symbol);
 
       let signal = "HOLD";
 
-      if (quote.regularMarketChangePercent > 1) signal = "BUY";
-      if (quote.regularMarketChangePercent < -1) signal = "SELL";
+      if (data.changePercent > 1) signal = "BUY";
+      if (data.changePercent < -1) signal = "SELL";
 
-      const stopLoss = Number((quote.regularMarketPrice * 0.98).toFixed(2));
+      const stopLoss = Number((data.price * 0.98).toFixed(2));
 
       results.push({
-        symbol: quote.symbol,
-        price: quote.regularMarketPrice,
-        changePercent: quote.regularMarketChangePercent,
+        ...data,
         signal,
         stopLoss
       });
-
-      await sleep(1500);
 
     } catch (error) {
 
       results.push({
         symbol,
-        error: error.message
+        error: "erro ao buscar dados"
       });
 
     }
@@ -135,5 +124,7 @@ app.get("/robot", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("Zetta backend rodando na porta " + PORT);
+
+  console.log("Servidor Zetta rodando na porta " + PORT);
+
 });
