@@ -1,13 +1,11 @@
 const express = require("express");
 const NodeCache = require("node-cache");
-const yahooFinance = require("yahoo-finance2");
+const yahooFinance = require("yahoo-finance2").default;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const cache = new NodeCache({ stdTTL: 300 });
-
-app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({
@@ -36,7 +34,7 @@ app.get("/scanner", async (req, res) => {
 
       if (cached) {
         results.push({
-          symbol: symbol,
+          symbol,
           source: "cache",
           data: cached
         });
@@ -46,23 +44,23 @@ app.get("/scanner", async (req, res) => {
       const quote = await yahooFinance.quote(symbol);
 
       const data = {
-        price: quote.regularMarketPrice || 0,
-        changePercent: quote.regularMarketChangePercent || 0,
-        volume: quote.regularMarketVolume || 0
+        price: quote.regularMarketPrice,
+        change: quote.regularMarketChangePercent,
+        volume: quote.regularMarketVolume
       };
 
       cache.set(symbol, data);
 
       results.push({
-        symbol: symbol,
+        symbol,
         source: "api",
-        data: data
+        data
       });
 
     } catch (error) {
 
       results.push({
-        symbol: symbol,
+        symbol,
         error: error.message
       });
 
