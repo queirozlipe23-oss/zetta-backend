@@ -1,16 +1,20 @@
 const express = require("express");
+const axios = require("axios");
 const NodeCache = require("node-cache");
-const yahooFinance = require("yahoo-finance2").default;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// cache 5 minutos
 const cache = new NodeCache({ stdTTL: 300 });
 
-app.use(express.json());
+const stocks = [
+  "PETR4.SA",
+  "VALE3.SA",
+  "ITUB4.SA",
+  "BBDC4.SA",
+  "WEGE3.SA"
+];
 
-// rota inicial
 app.get("/", (req, res) => {
   res.json({
     status: "Zetta backend online",
@@ -21,16 +25,6 @@ app.get("/", (req, res) => {
   });
 });
 
-// lista inicial de ações
-const stocks = [
-  "PETR4.SA",
-  "VALE3.SA",
-  "ITUB4.SA",
-  "BBDC4.SA",
-  "WEGE3.SA"
-];
-
-// SCANNER DE MERCADO
 app.get("/scanner", async (req, res) => {
 
   const results = [];
@@ -50,14 +44,22 @@ app.get("/scanner", async (req, res) => {
         continue;
       }
 
-      const quote = await yahooFinance.quote(symbol);
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
+
+      const response = await axios.get(url);
+
+      const quote = response.data.quoteResponse.result[0];
+
+      if (!quote) {
+        throw new Error("sem dados");
+      }
 
       const data = {
-        price: quote.regularMarketPrice || 0,
-        changePercent: quote.regularMarketChangePercent || 0,
-        volume: quote.regularMarketVolume || 0,
-        high: quote.regularMarketDayHigh || 0,
-        low: quote.regularMarketDayLow || 0
+        price: quote.regularMarketPrice,
+        changePercent: quote.regularMarketChangePercent,
+        volume: quote.regularMarketVolume,
+        high: quote.regularMarketDayHigh,
+        low: quote.regularMarketDayLow
       };
 
       cache.set(symbol, data);
@@ -72,7 +74,7 @@ app.get("/scanner", async (req, res) => {
 
       results.push({
         symbol,
-        error: "erro ao buscar dados"
+        error: error.message
       });
 
     }
@@ -83,7 +85,6 @@ app.get("/scanner", async (req, res) => {
 
 });
 
-// ROBÔ DE TRADE
 app.get("/robot", async (req, res) => {
 
   const results = [];
@@ -92,33 +93,29 @@ app.get("/robot", async (req, res) => {
 
     try {
 
-      const history = await yahooFinance.historical(symbol, {
-        period1: "2024-01-01",
-        interval: "1d"
-      });
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
 
-      if (!history || history.length < 15) {
-        continue;
+      const response = await axios.get(url);
+
+      const quote = response.data.quoteResponse.result[0];
+
+      if (!quote) {
+        throw new Error("sem dados");
       }
 
-      const closes = history.slice(-14).map(c => c.close);
-
-      const average =
-        closes.reduce((a, b) => a + b, 0) / closes.length;
-
-      const lastPrice = closes[closes.length - 1];
+      const price = quote.regularMarketPrice;
 
       let signal = "HOLD";
 
-      if (lastPrice > average) signal = "BUY";
-      if (lastPrice < average) signal = "SELL";
+      if (quote.regularMarketChangePercent > 1) signal = "BUY";
+      if (quote.regularMarketChangePercent < -1) signal = "SELL";
 
-      const stopLoss = Number((lastPrice * 0.98).toFixed(2));
+      const stopLoss = Number((price * 0.98).toFixed(2));
 
       results.push({
         symbol,
-        price: lastPrice,
-        average,
+        price,
+        changePercent: quote.regularMarketChangePercent,
         signal,
         stopLoss
       });
@@ -127,7 +124,7 @@ app.get("/robot", async (req, res) => {
 
       results.push({
         symbol,
-        error: "erro na análise"
+        error: error.message
       });
 
     }
@@ -138,7 +135,6 @@ app.get("/robot", async (req, res) => {
 
 });
 
-// iniciar servidor
 app.listen(PORT, () => {
   console.log("Servidor Zetta rodando na porta " + PORT);
 });
