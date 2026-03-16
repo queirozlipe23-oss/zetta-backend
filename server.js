@@ -15,6 +15,10 @@ const stocks = [
   "WEGE3.SA"
 ];
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 app.get("/", (req, res) => {
   res.json({
     status: "Zetta backend online",
@@ -25,89 +29,112 @@ app.get("/", (req, res) => {
   });
 });
 
-// SCANNER
 app.get("/scanner", async (req, res) => {
 
-  try {
+  const cacheKey = "scanner_data";
+  const cached = cache.get(cacheKey);
 
-    const cacheKey = "market_data";
+  if (cached) {
+    return res.json({
+      source: "cache",
+      data: cached
+    });
+  }
 
-    const cached = cache.get(cacheKey);
+  const results = [];
 
-    if (cached) {
-      return res.json(cached);
+  for (const symbol of stocks) {
+
+    try {
+
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
+
+      const response = await axios.get(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0"
+        }
+      });
+
+      const quote = response.data.quoteResponse.result[0];
+
+      const data = {
+        symbol: quote.symbol,
+        price: quote.regularMarketPrice,
+        changePercent: quote.regularMarketChangePercent,
+        volume: quote.regularMarketVolume
+      };
+
+      results.push(data);
+
+      await sleep(2000); // delay 2 segundos
+
+    } catch (error) {
+
+      results.push({
+        symbol,
+        error: error.message
+      });
+
     }
 
-    const symbols = stocks.join(",");
-
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
-
-    const response = await axios.get(url);
-
-    const quotes = response.data.quoteResponse.result;
-
-    const results = quotes.map(q => ({
-      symbol: q.symbol,
-      price: q.regularMarketPrice,
-      changePercent: q.regularMarketChangePercent,
-      volume: q.regularMarketVolume
-    }));
-
-    cache.set(cacheKey, results);
-
-    res.json(results);
-
-  } catch (error) {
-
-    res.json({
-      error: error.message
-    });
-
   }
+
+  cache.set(cacheKey, results);
+
+  res.json({
+    source: "api",
+    data: results
+  });
 
 });
 
-// ROBÔ
 app.get("/robot", async (req, res) => {
 
-  try {
+  const results = [];
 
-    const symbols = stocks.join(",");
+  for (const symbol of stocks) {
 
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+    try {
 
-    const response = await axios.get(url);
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
 
-    const quotes = response.data.quoteResponse.result;
+      const response = await axios.get(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0"
+        }
+      });
 
-    const results = quotes.map(q => {
+      const quote = response.data.quoteResponse.result[0];
 
       let signal = "HOLD";
 
-      if (q.regularMarketChangePercent > 1) signal = "BUY";
-      if (q.regularMarketChangePercent < -1) signal = "SELL";
+      if (quote.regularMarketChangePercent > 1) signal = "BUY";
+      if (quote.regularMarketChangePercent < -1) signal = "SELL";
 
-      const stopLoss = Number((q.regularMarketPrice * 0.98).toFixed(2));
+      const stopLoss = Number((quote.regularMarketPrice * 0.98).toFixed(2));
 
-      return {
-        symbol: q.symbol,
-        price: q.regularMarketPrice,
-        changePercent: q.regularMarketChangePercent,
+      results.push({
+        symbol: quote.symbol,
+        price: quote.regularMarketPrice,
+        changePercent: quote.regularMarketChangePercent,
         signal,
         stopLoss
-      };
+      });
 
-    });
+      await sleep(2000);
 
-    res.json(results);
+    } catch (error) {
 
-  } catch (error) {
+      results.push({
+        symbol,
+        error: error.message
+      });
 
-    res.json({
-      error: error.message
-    });
+    }
 
   }
+
+  res.json(results);
 
 });
 
