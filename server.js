@@ -25,113 +25,89 @@ app.get("/", (req, res) => {
   });
 });
 
+// SCANNER
 app.get("/scanner", async (req, res) => {
 
-  const results = [];
+  try {
 
-  for (const symbol of stocks) {
+    const cacheKey = "market_data";
 
-    try {
+    const cached = cache.get(cacheKey);
 
-      const cached = cache.get(symbol);
-
-      if (cached) {
-        results.push({
-          symbol,
-          source: "cache",
-          data: cached
-        });
-        continue;
-      }
-
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
-
-      const response = await axios.get(url);
-
-      const quote = response.data.quoteResponse.result[0];
-
-      if (!quote) {
-        throw new Error("sem dados");
-      }
-
-      const data = {
-        price: quote.regularMarketPrice,
-        changePercent: quote.regularMarketChangePercent,
-        volume: quote.regularMarketVolume,
-        high: quote.regularMarketDayHigh,
-        low: quote.regularMarketDayLow
-      };
-
-      cache.set(symbol, data);
-
-      results.push({
-        symbol,
-        source: "api",
-        data
-      });
-
-    } catch (error) {
-
-      results.push({
-        symbol,
-        error: error.message
-      });
-
+    if (cached) {
+      return res.json(cached);
     }
 
-  }
+    const symbols = stocks.join(",");
 
-  res.json(results);
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+
+    const response = await axios.get(url);
+
+    const quotes = response.data.quoteResponse.result;
+
+    const results = quotes.map(q => ({
+      symbol: q.symbol,
+      price: q.regularMarketPrice,
+      changePercent: q.regularMarketChangePercent,
+      volume: q.regularMarketVolume
+    }));
+
+    cache.set(cacheKey, results);
+
+    res.json(results);
+
+  } catch (error) {
+
+    res.json({
+      error: error.message
+    });
+
+  }
 
 });
 
+// ROBÔ
 app.get("/robot", async (req, res) => {
 
-  const results = [];
+  try {
 
-  for (const symbol of stocks) {
+    const symbols = stocks.join(",");
 
-    try {
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
 
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
+    const response = await axios.get(url);
 
-      const response = await axios.get(url);
+    const quotes = response.data.quoteResponse.result;
 
-      const quote = response.data.quoteResponse.result[0];
-
-      if (!quote) {
-        throw new Error("sem dados");
-      }
-
-      const price = quote.regularMarketPrice;
+    const results = quotes.map(q => {
 
       let signal = "HOLD";
 
-      if (quote.regularMarketChangePercent > 1) signal = "BUY";
-      if (quote.regularMarketChangePercent < -1) signal = "SELL";
+      if (q.regularMarketChangePercent > 1) signal = "BUY";
+      if (q.regularMarketChangePercent < -1) signal = "SELL";
 
-      const stopLoss = Number((price * 0.98).toFixed(2));
+      const stopLoss = Number((q.regularMarketPrice * 0.98).toFixed(2));
 
-      results.push({
-        symbol,
-        price,
-        changePercent: quote.regularMarketChangePercent,
+      return {
+        symbol: q.symbol,
+        price: q.regularMarketPrice,
+        changePercent: q.regularMarketChangePercent,
         signal,
         stopLoss
-      });
+      };
 
-    } catch (error) {
+    });
 
-      results.push({
-        symbol,
-        error: error.message
-      });
+    res.json(results);
 
-    }
+  } catch (error) {
+
+    res.json({
+      error: error.message
+    });
 
   }
-
-  res.json(results);
 
 });
 
