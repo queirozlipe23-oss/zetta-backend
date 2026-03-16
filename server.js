@@ -15,24 +15,30 @@ const stocks = [
   "WEGE3.SA"
 ];
 
+const axiosInstance = axios.create({
+  timeout: 10000,
+  headers: {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive"
+  }
+});
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 app.get("/", (req, res) => {
   res.json({
-    status: "Zetta backend online",
-    endpoints: {
-      scanner: "/scanner",
-      robot: "/robot"
-    }
+    status: "Zetta backend online"
   });
 });
 
 app.get("/scanner", async (req, res) => {
 
-  const cacheKey = "scanner_data";
-  const cached = cache.get(cacheKey);
+  const cached = cache.get("scanner");
 
   if (cached) {
     return res.json({
@@ -49,24 +55,18 @@ app.get("/scanner", async (req, res) => {
 
       const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
 
-      const response = await axios.get(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0"
-        }
-      });
+      const response = await axiosInstance.get(url);
 
       const quote = response.data.quoteResponse.result[0];
 
-      const data = {
+      results.push({
         symbol: quote.symbol,
         price: quote.regularMarketPrice,
         changePercent: quote.regularMarketChangePercent,
         volume: quote.regularMarketVolume
-      };
+      });
 
-      results.push(data);
-
-      await sleep(2000); // delay 2 segundos
+      await sleep(1500);
 
     } catch (error) {
 
@@ -79,7 +79,7 @@ app.get("/scanner", async (req, res) => {
 
   }
 
-  cache.set(cacheKey, results);
+  cache.set("scanner", results);
 
   res.json({
     source: "api",
@@ -98,11 +98,7 @@ app.get("/robot", async (req, res) => {
 
       const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
 
-      const response = await axios.get(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0"
-        }
-      });
+      const response = await axiosInstance.get(url);
 
       const quote = response.data.quoteResponse.result[0];
 
@@ -121,7 +117,7 @@ app.get("/robot", async (req, res) => {
         stopLoss
       });
 
-      await sleep(2000);
+      await sleep(1500);
 
     } catch (error) {
 
@@ -139,5 +135,5 @@ app.get("/robot", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("Servidor Zetta rodando na porta " + PORT);
+  console.log("Zetta backend rodando na porta " + PORT);
 });
