@@ -43,14 +43,13 @@ async function getStock(symbol) {
   }
 }
 
-// 🔹 CALCULAR RSI
+// 🔹 RSI
 function calculateRSI(prices) {
   let gains = 0;
   let losses = 0;
 
   for (let i = 1; i < prices.length; i++) {
     const diff = prices[i] - prices[i - 1];
-
     if (diff > 0) gains += diff;
     else losses -= diff;
   }
@@ -61,15 +60,19 @@ function calculateRSI(prices) {
   if (avgLoss === 0) return 100;
 
   const rs = avgGain / avgLoss;
-  const rsi = 100 - (100 / (1 + rs));
+  return Number((100 - (100 / (1 + rs))).toFixed(2));
+}
 
-  return Number(rsi.toFixed(2));
+// 🔹 MÉDIA MÓVEL
+function movingAverage(prices) {
+  const sum = prices.reduce((a, b) => a + b, 0);
+  return sum / prices.length;
 }
 
 // 🔹 HOME
 app.get("/", (req, res) => {
   res.json({
-    status: "Zetta V2 online",
+    status: "Zetta V3 online",
     endpoints: {
       scanner: "/scanner",
       robot: "/robot"
@@ -92,14 +95,12 @@ app.get("/scanner", async (req, res) => {
   const results = [];
 
   for (const symbol of stocks) {
-
     const stock = await getStock(symbol);
 
     results.push({
       symbol: stock.symbol,
       price: stock.price
     });
-
   }
 
   cache.set("scanner", results);
@@ -111,7 +112,7 @@ app.get("/scanner", async (req, res) => {
 
 });
 
-// 🔥 ROBÔ COM RSI
+// 🔥 ROBÔ INTELIGENTE
 app.get("/robot", async (req, res) => {
 
   const results = [];
@@ -122,38 +123,3 @@ app.get("/robot", async (req, res) => {
 
     if (!stock.history) {
       results.push({
-        symbol,
-        status: "indisponível"
-      });
-      continue;
-    }
-
-    const prices = stock.history.map(h => h.close);
-
-    const rsi = calculateRSI(prices);
-
-    let signal = "HOLD";
-
-    if (rsi < 30) signal = "BUY";
-    else if (rsi > 70) signal = "SELL";
-
-    const stopLoss = Number((stock.price * 0.98).toFixed(2));
-
-    results.push({
-      symbol: stock.symbol,
-      price: stock.price,
-      rsi,
-      signal,
-      stopLoss
-    });
-
-  }
-
-  res.json(results);
-
-});
-
-// 🔹 START
-app.listen(PORT, () => {
-  console.log("Zetta V2 rodando na porta " + PORT);
-});
