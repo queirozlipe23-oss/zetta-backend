@@ -15,30 +15,46 @@ const stocks = [
   "WEGE3"
 ];
 
+// 🔹 FUNÇÃO SEGURA PARA PEGAR DADOS
 async function getStock(symbol) {
+  try {
+    const url = `https://brapi.dev/api/quote/${symbol}`;
+    const response = await axios.get(url);
 
-  const url = `https://brapi.dev/api/quote/${symbol}`;
+    const data = response.data.results[0];
 
-  const response = await axios.get(url);
+    if (!data) throw new Error("sem dados");
 
-  const data = response.data.results[0];
+    return {
+      symbol: data.symbol,
+      price: data.regularMarketPrice || 0,
+      changePercent: data.regularMarketChangePercent || 0,
+      volume: data.regularMarketVolume || 0
+    };
 
-  return {
-    symbol: data.symbol,
-    price: data.regularMarketPrice,
-    changePercent: data.regularMarketChangePercent,
-    volume: data.regularMarketVolume
-  };
+  } catch (error) {
+    return {
+      symbol,
+      price: null,
+      changePercent: null,
+      volume: null,
+      status: "indisponível"
+    };
+  }
 }
 
+// 🔹 ROTA INICIAL
 app.get("/", (req, res) => {
-
   res.json({
-    status: "Zetta backend online"
+    status: "Zetta backend online",
+    endpoints: {
+      scanner: "/scanner",
+      robot: "/robot"
+    }
   });
-
 });
 
+// 🔹 SCANNER
 app.get("/scanner", async (req, res) => {
 
   const cached = cache.get("scanner");
@@ -53,22 +69,8 @@ app.get("/scanner", async (req, res) => {
   const results = [];
 
   for (const symbol of stocks) {
-
-    try {
-
-      const stock = await getStock(symbol);
-
-      results.push(stock);
-
-    } catch (error) {
-
-      results.push({
-        symbol,
-        error: "erro ao buscar dados"
-      });
-
-    }
-
+    const stock = await getStock(symbol);
+    results.push(stock);
   }
 
   cache.set("scanner", results);
@@ -80,37 +82,29 @@ app.get("/scanner", async (req, res) => {
 
 });
 
+// 🔹 ROBÔ DE TRADE
 app.get("/robot", async (req, res) => {
 
   const results = [];
 
   for (const symbol of stocks) {
 
-    try {
+    const stock = await getStock(symbol);
 
-      const stock = await getStock(symbol);
+    let signal = "HOLD";
 
-      let signal = "HOLD";
+    if (stock.changePercent > 2) signal = "BUY";
+    else if (stock.changePercent < -2) signal = "SELL";
 
-      if (stock.changePercent > 1) signal = "BUY";
-      if (stock.changePercent < -1) signal = "SELL";
+    const stopLoss = stock.price
+      ? Number((stock.price * 0.98).toFixed(2))
+      : null;
 
-      const stopLoss = Number((stock.price * 0.98).toFixed(2));
-
-      results.push({
-        ...stock,
-        signal,
-        stopLoss
-      });
-
-    } catch (error) {
-
-      results.push({
-        symbol,
-        error: "erro ao buscar dados"
-      });
-
-    }
+    results.push({
+      ...stock,
+      signal,
+      stopLoss
+    });
 
   }
 
@@ -118,8 +112,7 @@ app.get("/robot", async (req, res) => {
 
 });
 
+// 🔹 INICIAR SERVIDOR
 app.listen(PORT, () => {
-
   console.log("Servidor Zetta rodando na porta " + PORT);
-
 });
