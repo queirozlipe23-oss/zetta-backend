@@ -7,12 +7,11 @@ const PORT = process.env.PORT || 3000;
 
 const cache = new NodeCache({ stdTTL: 300 });
 
+// 🔥 LISTA MAIOR DE AÇÕES
 const stocks = [
-  "PETR4",
-  "VALE3",
-  "ITUB4",
-  "BBDC4",
-  "WEGE3"
+  "PETR4","VALE3","ITUB4","BBDC4","ABEV3",
+  "WEGE3","BBAS3","RENT3","SUZB3","JBSS3",
+  "RADL3","LREN3","MGLU3","GGBR4","CSAN3"
 ];
 
 // 🔹 PEGAR DADOS
@@ -69,21 +68,36 @@ function movingAverage(prices) {
   return sum / prices.length;
 }
 
+// 🔥 CALCULAR SCORE
+function calculateScore(rsi, trend) {
+
+  let score = 50;
+
+  if (rsi < 30) score += 20;
+  if (rsi > 70) score += 20;
+
+  if (trend === "UP") score += 20;
+  if (trend === "DOWN") score += 10;
+
+  return score;
+}
+
 // 🔹 HOME
 app.get("/", (req, res) => {
   res.json({
-    status: "Zetta V3 online",
+    status: "Zetta V4 online",
     endpoints: {
       scanner: "/scanner",
-      robot: "/robot"
+      robot: "/robot",
+      top: "/top"
     }
   });
 });
 
-// 🔹 SCANNER
-app.get("/scanner", async (req, res) => {
+// 🔥 TOP 10
+app.get("/top", async (req, res) => {
 
-  const cached = cache.get("scanner");
+  const cached = cache.get("top");
 
   if (cached) {
     return res.json({
@@ -95,39 +109,10 @@ app.get("/scanner", async (req, res) => {
   const results = [];
 
   for (const symbol of stocks) {
-    const stock = await getStock(symbol);
-
-    results.push({
-      symbol: stock.symbol,
-      price: stock.price
-    });
-  }
-
-  cache.set("scanner", results);
-
-  res.json({
-    source: "api",
-    data: results
-  });
-
-});
-
-// 🔥 ROBÔ INTELIGENTE
-app.get("/robot", async (req, res) => {
-
-  const results = [];
-
-  for (const symbol of stocks) {
 
     const stock = await getStock(symbol);
 
-    if (!stock.history) {
-      results.push({
-        symbol,
-        status: "indisponível"
-      });
-      continue;
-    }
+    if (!stock.history) continue;
 
     const prices = stock.history.map(h => h.close);
 
@@ -143,25 +128,34 @@ app.get("/robot", async (req, res) => {
     if (rsi < 30 && trend === "UP") signal = "BUY";
     else if (rsi > 70 && trend === "DOWN") signal = "SELL";
 
-    const stopLoss = Number((stock.price * 0.98).toFixed(2));
+    const score = calculateScore(rsi, trend);
 
     results.push({
       symbol: stock.symbol,
       price: stock.price,
       rsi,
       trend,
-      movingAverage: Number(ma.toFixed(2)),
       signal,
-      stopLoss
+      score
     });
 
   }
 
-  res.json(results);
+  // 🔥 ordenar pelo score
+  const top = results
+    .filter(r => r.signal !== "HOLD")
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+
+  cache.set("top", top);
+
+  res.json({
+    source: "api",
+    data: top
+  });
 
 });
 
-// 🔹 START
 app.listen(PORT, () => {
-  console.log("Zetta V3 rodando na porta " + PORT);
+  console.log("Zetta V4 rodando na porta " + PORT);
 });
