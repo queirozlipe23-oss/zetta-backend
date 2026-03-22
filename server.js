@@ -143,7 +143,7 @@ app.get("/top", async (req, res) => {
 
   // 🔥 ordenar pelo score
   const top = results
-    .filter(r => r.signal !== "HOLD")
+    .filter(r => r.score >= 60)
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
