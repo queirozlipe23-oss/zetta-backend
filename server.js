@@ -8,32 +8,27 @@ const PORT = process.env.PORT || 3000;
 const cache = new NodeCache({ stdTTL: 300 });
 
 const stocks = [
-  "PETR4.SA",
-  "VALE3.SA",
-  "ITUB4.SA",
-  "BBDC4.SA",
-  "WEGE3.SA"
+  "PETR4",
+  "VALE3",
+  "ITUB4",
+  "BBDC4",
+  "WEGE3"
 ];
 
 async function getStock(symbol) {
 
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+  const url = `https://brapi.dev/api/quote/${symbol}`;
 
   const response = await axios.get(url);
 
-  const result = response.data.chart.result[0];
-
-  const price = result.meta.regularMarketPrice;
-  const previous = result.meta.previousClose;
-
-  const changePercent = ((price - previous) / previous) * 100;
+  const data = response.data.results[0];
 
   return {
-    symbol,
-    price,
-    changePercent
+    symbol: data.symbol,
+    price: data.regularMarketPrice,
+    changePercent: data.regularMarketChangePercent,
+    volume: data.regularMarketVolume
   };
-
 }
 
 app.get("/", (req, res) => {
@@ -61,9 +56,9 @@ app.get("/scanner", async (req, res) => {
 
     try {
 
-      const data = await getStock(symbol);
+      const stock = await getStock(symbol);
 
-      results.push(data);
+      results.push(stock);
 
     } catch (error) {
 
@@ -93,17 +88,17 @@ app.get("/robot", async (req, res) => {
 
     try {
 
-      const data = await getStock(symbol);
+      const stock = await getStock(symbol);
 
       let signal = "HOLD";
 
-      if (data.changePercent > 1) signal = "BUY";
-      if (data.changePercent < -1) signal = "SELL";
+      if (stock.changePercent > 1) signal = "BUY";
+      if (stock.changePercent < -1) signal = "SELL";
 
-      const stopLoss = Number((data.price * 0.98).toFixed(2));
+      const stopLoss = Number((stock.price * 0.98).toFixed(2));
 
       results.push({
-        ...data,
+        ...stock,
         signal,
         stopLoss
       });
