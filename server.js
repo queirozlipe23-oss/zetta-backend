@@ -15,38 +15,61 @@ const stocks = [
   "WEGE3"
 ];
 
-// 🔹 FUNÇÃO SEGURA PARA PEGAR DADOS
+// 🔹 PEGAR DADOS
 async function getStock(symbol) {
   try {
-    const url = `https://brapi.dev/api/quote/${symbol}`;
+    const url = `https://brapi.dev/api/quote/${symbol}?range=1mo&interval=1d`;
     const response = await axios.get(url);
 
     const data = response.data.results[0];
 
-    if (!data) throw new Error("sem dados");
+    if (!data || !data.historicalDataPrice) {
+      throw new Error("sem histórico");
+    }
 
     return {
       symbol: data.symbol,
-      price: data.regularMarketPrice || 0,
-      changePercent: data.regularMarketChangePercent || 0,
-      volume: data.regularMarketVolume || 0
+      price: data.regularMarketPrice,
+      history: data.historicalDataPrice
     };
 
   } catch (error) {
     return {
       symbol,
       price: null,
-      changePercent: null,
-      volume: null,
+      history: null,
       status: "indisponível"
     };
   }
 }
 
-// 🔹 ROTA INICIAL
+// 🔹 CALCULAR RSI
+function calculateRSI(prices) {
+  let gains = 0;
+  let losses = 0;
+
+  for (let i = 1; i < prices.length; i++) {
+    const diff = prices[i] - prices[i - 1];
+
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+
+  const avgGain = gains / prices.length;
+  const avgLoss = losses / prices.length;
+
+  if (avgLoss === 0) return 100;
+
+  const rs = avgGain / avgLoss;
+  const rsi = 100 - (100 / (1 + rs));
+
+  return Number(rsi.toFixed(2));
+}
+
+// 🔹 HOME
 app.get("/", (req, res) => {
   res.json({
-    status: "Zetta backend online",
+    status: "Zetta V2 online",
     endpoints: {
       scanner: "/scanner",
       robot: "/robot"
@@ -69,8 +92,14 @@ app.get("/scanner", async (req, res) => {
   const results = [];
 
   for (const symbol of stocks) {
+
     const stock = await getStock(symbol);
-    results.push(stock);
+
+    results.push({
+      symbol: stock.symbol,
+      price: stock.price
+    });
+
   }
 
   cache.set("scanner", results);
@@ -82,7 +111,7 @@ app.get("/scanner", async (req, res) => {
 
 });
 
-// 🔹 ROBÔ DE TRADE
+// 🔥 ROBÔ COM RSI
 app.get("/robot", async (req, res) => {
 
   const results = [];
@@ -91,17 +120,29 @@ app.get("/robot", async (req, res) => {
 
     const stock = await getStock(symbol);
 
+    if (!stock.history) {
+      results.push({
+        symbol,
+        status: "indisponível"
+      });
+      continue;
+    }
+
+    const prices = stock.history.map(h => h.close);
+
+    const rsi = calculateRSI(prices);
+
     let signal = "HOLD";
 
-    if (stock.changePercent > 2) signal = "BUY";
-    else if (stock.changePercent < -2) signal = "SELL";
+    if (rsi < 30) signal = "BUY";
+    else if (rsi > 70) signal = "SELL";
 
-    const stopLoss = stock.price
-      ? Number((stock.price * 0.98).toFixed(2))
-      : null;
+    const stopLoss = Number((stock.price * 0.98).toFixed(2));
 
     results.push({
-      ...stock,
+      symbol: stock.symbol,
+      price: stock.price,
+      rsi,
       signal,
       stopLoss
     });
@@ -112,7 +153,7 @@ app.get("/robot", async (req, res) => {
 
 });
 
-// 🔹 INICIAR SERVIDOR
+// 🔹 START
 app.listen(PORT, () => {
-  console.log("Servidor Zetta rodando na porta " + PORT);
+  console.log("Zetta V2 rodando na porta " + PORT);
 });
