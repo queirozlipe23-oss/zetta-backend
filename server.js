@@ -154,7 +154,53 @@ app.get("/top", async (req, res) => {
   });
 
 });
+// 🔥 ROBÔ (volta ele)
+app.get("/robot", async (req, res) => {
 
+  const results = [];
+
+  for (const symbol of stocks) {
+
+    const stock = await getStock(symbol);
+
+    if (!stock.history) {
+      results.push({
+        symbol,
+        status: "indisponível"
+      });
+      continue;
+    }
+
+    const prices = stock.history.map(h => h.close);
+
+    const rsi = calculateRSI(prices);
+    const ma = movingAverage(prices);
+
+    let trend = "SIDEWAYS";
+    if (stock.price > ma) trend = "UP";
+    else if (stock.price < ma) trend = "DOWN";
+
+    let signal = "HOLD";
+
+    if (rsi < 30 && trend === "UP") signal = "BUY";
+    else if (rsi > 70 && trend === "DOWN") signal = "SELL";
+
+    const stopLoss = Number((stock.price * 0.98).toFixed(2));
+
+    results.push({
+      symbol: stock.symbol,
+      price: stock.price,
+      rsi,
+      trend,
+      signal,
+      stopLoss
+    });
+
+  }
+
+  res.json(results);
+
+});
 app.listen(PORT, () => {
   console.log("Zetta V4 rodando na porta " + PORT);
 });
