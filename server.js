@@ -64,26 +64,37 @@ function movingAverage(prices) {
   return prices.reduce((a, b) => a + b, 0) / prices.length;
 }
 
-// 🔥 DETECTAR ROMPIMENTO
+// 🔥 ROMPIMENTO
 function detectBreakout(prices) {
-  const recent = prices.slice(-5); // últimos 5 dias
+  const recent = prices.slice(-5);
   const maxRecent = Math.max(...recent);
   const current = prices[prices.length - 1];
 
   return current >= maxRecent;
 }
 
-// Score melhorado
-function calculateScore(rsi, trend, breakout) {
+// 🔥 VOLUME (simulado com variação de preço)
+function detectVolumeStrength(prices) {
+  const last = prices[prices.length - 1];
+  const prev = prices[prices.length - 2];
+
+  const variation = Math.abs((last - prev) / prev);
+
+  return variation > 0.02; // 2% de movimento
+}
+
+// SCORE
+function calculateScore(rsi, trend, breakout, volume) {
   let score = 50;
 
-  if (rsi < 30) score += 15;
+  if (rsi < 30) score += 10;
   if (rsi > 70) score += 10;
 
-  if (trend === "UP") score += 20;
+  if (trend === "UP") score += 15;
   if (trend === "DOWN") score += 5;
 
   if (breakout) score += 25;
+  if (volume) score += 25;
 
   return score;
 }
@@ -91,7 +102,7 @@ function calculateScore(rsi, trend, breakout) {
 // HOME
 app.get("/", (req, res) => {
   res.json({
-    status: "Zetta V6 online",
+    status: "Zetta V7 online",
     endpoints: {
       robot: "/robot",
       top: "/top"
@@ -116,6 +127,7 @@ app.get("/robot", async (req, res) => {
     const rsi = calculateRSI(prices);
     const ma = movingAverage(prices);
     const breakout = detectBreakout(prices);
+    const volume = detectVolumeStrength(prices);
 
     let trend = "SIDEWAYS";
     if (stock.price > ma) trend = "UP";
@@ -123,8 +135,8 @@ app.get("/robot", async (req, res) => {
 
     let signal = "HOLD";
 
-    // 🔥 NOVA LÓGICA
-    if (breakout && trend === "UP") signal = "BUY";
+    // 🔥 LÓGICA FINAL
+    if (breakout && volume && trend === "UP") signal = "BUY";
     else if (rsi > 75 && trend === "DOWN") signal = "SELL";
 
     const stopLoss = Number((stock.price * 0.97).toFixed(2));
@@ -135,6 +147,7 @@ app.get("/robot", async (req, res) => {
       rsi,
       trend,
       breakout,
+      volume,
       signal,
       stopLoss
     });
@@ -162,6 +175,7 @@ app.get("/top", async (req, res) => {
     const rsi = calculateRSI(prices);
     const ma = movingAverage(prices);
     const breakout = detectBreakout(prices);
+    const volume = detectVolumeStrength(prices);
 
     let trend = "SIDEWAYS";
     if (stock.price > ma) trend = "UP";
@@ -169,10 +183,10 @@ app.get("/top", async (req, res) => {
 
     let signal = "HOLD";
 
-    if (breakout && trend === "UP") signal = "BUY";
+    if (breakout && volume && trend === "UP") signal = "BUY";
     else if (rsi > 75 && trend === "DOWN") signal = "SELL";
 
-    const score = calculateScore(rsi, trend, breakout);
+    const score = calculateScore(rsi, trend, breakout, volume);
 
     results.push({
       symbol: stock.symbol,
@@ -180,6 +194,7 @@ app.get("/top", async (req, res) => {
       rsi,
       trend,
       breakout,
+      volume,
       signal,
       score
     });
@@ -195,5 +210,5 @@ app.get("/top", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("Zetta V6 rodando na porta " + PORT);
+  console.log("Zetta V7 rodando na porta " + PORT);
 });
