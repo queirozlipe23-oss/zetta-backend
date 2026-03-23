@@ -7,12 +7,17 @@ const PORT = process.env.PORT || 3000;
 
 const cache = new NodeCache({ stdTTL: 300 });
 
-// 🔥 LISTA MAIOR DE AÇÕES
+// 🔥 LISTA DE AÇÕES
 const stocks = [
   "PETR4","VALE3","ITUB4","BBDC4","ABEV3",
   "WEGE3","BBAS3","RENT3","SUZB3","JBSS3",
   "RADL3","LREN3","MGLU3","GGBR4","CSAN3"
 ];
+
+// 🔹 FUNÇÃO DE DELAY
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // 🔹 PEGAR DADOS
 async function getStock(symbol) {
@@ -33,12 +38,7 @@ async function getStock(symbol) {
     };
 
   } catch (error) {
-    return {
-      symbol,
-      price: null,
-      history: null,
-      status: "indisponível"
-    };
+    return null;
   }
 }
 
@@ -68,9 +68,8 @@ function movingAverage(prices) {
   return sum / prices.length;
 }
 
-// 🔥 CALCULAR SCORE
+// 🔹 SCORE
 function calculateScore(rsi, trend) {
-
   let score = 50;
 
   if (rsi < 30) score += 20;
@@ -85,13 +84,74 @@ function calculateScore(rsi, trend) {
 // 🔹 HOME
 app.get("/", (req, res) => {
   res.json({
-    status: "Zetta V4 online",
+    status: "Zetta V5 online",
     endpoints: {
-      scanner: "/scanner",
       robot: "/robot",
       top: "/top"
     }
   });
+});
+
+// 🔥 ROBÔ ESTÁVEL
+app.get("/robot", async (req, res) => {
+
+  const cached = cache.get("robot");
+
+  if (cached) {
+    return res.json({
+      source: "cache",
+      data: cached
+    });
+  }
+
+  const results = [];
+
+  for (const symbol of stocks) {
+    try {
+
+      await sleep(800);
+
+      const stock = await getStock(symbol);
+
+      if (!stock) continue;
+
+      const prices = stock.history.map(h => h.close);
+
+      const rsi = calculateRSI(prices);
+      const ma = movingAverage(prices);
+
+      let trend = "SIDEWAYS";
+      if (stock.price > ma) trend = "UP";
+      else if (stock.price < ma) trend = "DOWN";
+
+      let signal = "HOLD";
+
+      if (rsi < 30 && trend === "UP") signal = "BUY";
+      else if (rsi > 70 && trend === "DOWN") signal = "SELL";
+
+      const stopLoss = Number((stock.price * 0.98).toFixed(2));
+
+      results.push({
+        symbol: stock.symbol,
+        price: stock.price,
+        rsi,
+        trend,
+        signal,
+        stopLoss
+      });
+
+    } catch (err) {
+      // ignora erro
+    }
+  }
+
+  cache.set("robot", results);
+
+  res.json({
+    source: "api",
+    data: results
+  });
+
 });
 
 // 🔥 TOP 10
@@ -109,39 +169,44 @@ app.get("/top", async (req, res) => {
   const results = [];
 
   for (const symbol of stocks) {
+    try {
 
-    const stock = await getStock(symbol);
+      await sleep(800);
 
-    if (!stock.history) continue;
+      const stock = await getStock(symbol);
 
-    const prices = stock.history.map(h => h.close);
+      if (!stock) continue;
 
-    const rsi = calculateRSI(prices);
-    const ma = movingAverage(prices);
+      const prices = stock.history.map(h => h.close);
 
-    let trend = "SIDEWAYS";
-    if (stock.price > ma) trend = "UP";
-    else if (stock.price < ma) trend = "DOWN";
+      const rsi = calculateRSI(prices);
+      const ma = movingAverage(prices);
 
-    let signal = "HOLD";
+      let trend = "SIDEWAYS";
+      if (stock.price > ma) trend = "UP";
+      else if (stock.price < ma) trend = "DOWN";
 
-    if (rsi < 30 && trend === "UP") signal = "BUY";
-    else if (rsi > 70 && trend === "DOWN") signal = "SELL";
+      let signal = "HOLD";
 
-    const score = calculateScore(rsi, trend);
+      if (rsi < 30 && trend === "UP") signal = "BUY";
+      else if (rsi > 70 && trend === "DOWN") signal = "SELL";
 
-    results.push({
-      symbol: stock.symbol,
-      price: stock.price,
-      rsi,
-      trend,
-      signal,
-      score
-    });
+      const score = calculateScore(rsi, trend);
 
+      results.push({
+        symbol: stock.symbol,
+        price: stock.price,
+        rsi,
+        trend,
+        signal,
+        score
+      });
+
+    } catch (err) {
+      // ignora erro
+    }
   }
 
-  // 🔥 ordenar pelo score
   const top = results
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
@@ -154,53 +219,7 @@ app.get("/top", async (req, res) => {
   });
 
 });
-// 🔥 ROBÔ (volta ele)
-app.get("/robot", async (req, res) => {
 
-  const results = [];
-
-  for (const symbol of stocks) {
-
-    const stock = await getStock(symbol);
-
-    if (!stock.history) {
-      results.push({
-        symbol,
-        status: "indisponível"
-      });
-      continue;
-    }
-
-    const prices = stock.history.map(h => h.close);
-
-    const rsi = calculateRSI(prices);
-    const ma = movingAverage(prices);
-
-    let trend = "SIDEWAYS";
-    if (stock.price > ma) trend = "UP";
-    else if (stock.price < ma) trend = "DOWN";
-
-    let signal = "HOLD";
-
-    if (rsi < 30 && trend === "UP") signal = "BUY";
-    else if (rsi > 70 && trend === "DOWN") signal = "SELL";
-
-    const stopLoss = Number((stock.price * 0.98).toFixed(2));
-
-    results.push({
-      symbol: stock.symbol,
-      price: stock.price,
-      rsi,
-      trend,
-      signal,
-      stopLoss
-    });
-
-  }
-
-  res.json(results);
-
-});
 app.listen(PORT, () => {
-  console.log("Zetta V4 rodando na porta " + PORT);
+  console.log("Zetta V5 rodando na porta " + PORT);
 });
